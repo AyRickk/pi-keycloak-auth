@@ -1,0 +1,66 @@
+{
+  "name": "pi-keycloak-auth",
+  "version": "0.1.0",
+  "description": "Keycloak OAuth2/OIDC login for the pi coding agent: PKCE browser and device flows, offline tokens, automatic refresh, OpenAI-compatible provider.",
+  "license": "MIT",
+  "type": "module",
+  "author": "AyRickk",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AyRickk/pi-keycloak-auth.git"
+  },
+  "homepage": "https://github.com/AyRickk/pi-keycloak-auth#readme",
+  "bugs": "https://github.com/AyRickk/pi-keycloak-auth/issues",
+  "keywords": [
+    "pi-package",
+    "pi",
+    "keycloak",
+    "oauth2",
+    "oidc",
+    "pkce",
+    "device-flow",
+    "sso"
+  ],
+  "engines": {
+    "node": ">=22.19.0"
+  },
+  "main": "./dist/index.js",
+  "exports": {
+    ".": "./dist/index.js"
+  },
+  "files": [
+    "dist/index.js",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
+  "pi": {
+    "extensions": [
+      "./dist/index.js"
+    ]
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "check:bundle": "node scripts/check-bundle.mjs",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "vitest run --config vitest.e2e.config.ts",
+    "prepack": "npm run build && npm run check:bundle",
+    "test:host": "vitest run --config vitest.host.config.ts"
+  },
+  "devDependencies": {
+    "@earendil-works/pi-coding-agent": "1.5.0",
+    "@eslint/js": "^9.39.5",
+    "@types/node": "^22.20.5",
+    "esbuild": "^0.25.12",
+    "eslint": "^9.39.5",
+    "prettier": "^3.9.10",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.72.1",
+    "vitest": "^3.2.7"
+  }
+}

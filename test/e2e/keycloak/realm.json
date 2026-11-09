@@ -1,0 +1,58 @@
+{
+  "realm": "pi-test",
+  "enabled": true,
+  "accessTokenLifespan": 60,
+  "ssoSessionIdleTimeout": 60,
+  "ssoSessionMaxLifespan": 90,
+  "offlineSessionIdleTimeout": 2592000,
+  "revokeRefreshToken": true,
+  "refreshTokenMaxReuse": 0,
+  "oauth2DeviceCodeLifespan": 600,
+  "oauth2DevicePollingInterval": 1,
+  "clients": [
+    {
+      "clientId": "pi-cli",
+      "name": "pi",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "implicitFlowEnabled": false,
+      "serviceAccountsEnabled": false,
+      "consentRequired": false,
+      "redirectUris": ["http://127.0.0.1:49170/callback", "http://127.0.0.1/*"],
+      "webOrigins": [],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "oauth2.device.authorization.grant.enabled": "true",
+        "post.logout.redirect.uris": "+"
+      },
+      "defaultClientScopes": ["basic", "profile", "email", "roles", "web-origins", "acr"],
+      "optionalClientScopes": ["offline_access"],
+      "protocolMappers": [
+        {
+          "name": "llm-gateway audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.custom.audience": "llm-gateway",
+            "access.token.claim": "true",
+            "id.token.claim": "false"
+          }
+        }
+      ]
+    }
+  ],
+  "users": [
+    {
+      "username": "alice",
+      "enabled": true,
+      "email": "alice@example.test",
+      "emailVerified": true,
+      "realmRoles": ["default-roles-pi-test"],
+      "firstName": "Alice",
+      "lastName": "Test",
+      "credentials": [{ "type": "password", "value": "alice", "temporary": false }]
+    }
+  ]
+}

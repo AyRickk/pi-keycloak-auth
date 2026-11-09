@@ -1,0 +1,6 @@
+node_modules/
+dist/
+coverage/
+*.tgz
+.e2e/
+__pycache__/
