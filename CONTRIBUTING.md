@@ -64,24 +64,33 @@ python3 test/pi/real-pi-check.py /tmp/real-pi    # prints PASS/FAIL per check, k
 
 ## Pull requests
 
-- One topic per pull request; describe the user-visible change and link the issue.
-- Add or update tests with the change; run the end-to-end suite when login or refresh
-  behavior changes.
-- Update the README or `docs/` when behavior or configuration changes, and add a line under
-  `## [Unreleased]` in `CHANGELOG.md`.
-- Keep commit messages short and imperative ("Fix device polling interval").
-- CI must be green: typecheck, lint, format, unit and host tests on Linux and macOS with Node
-  22.19 and 24, bundle and package checks, then end-to-end and real pi checks.
+`main` is protected: every change, including the maintainer's, goes through a pull request.
+
+- Fork the repository (or create a branch if you have write access) and open a pull request
+  against `main`. One topic per pull request; link the issue it addresses.
+- **The pull request title becomes the commit message**: pull requests are squash-merged, so
+  write the title as a short imperative sentence ("Fix device polling interval").
+- All required checks must pass: typecheck, lint, format, unit and host tests on Linux and
+  macOS with Node 22.19 and 24, bundle and package checks, the end-to-end suite against
+  Keycloak and the real pi check. The branch must be up to date with `main`.
+- Review conversations must be resolved before merging.
+- Add or update tests with the change; update the README or `docs/` when behavior or
+  configuration changes, and add a line under `## [Unreleased]` in `CHANGELOG.md`.
+- History stays linear: no merge commits, no force pushes to `main`.
 
 ## Releases
 
-Maintainers only.
+Maintainers only. Release tags `v*` can only be created by maintainers and can never be moved
+or deleted; GitHub releases are immutable once published.
 
-1. Move the `Unreleased` entries of `CHANGELOG.md` under a new `## [X.Y.Z] - YYYY-MM-DD`
-   heading and update the comparison links at the bottom.
-2. Set `"version": "X.Y.Z"` in `package.json` and run `npm install --package-lock-only`.
-3. Commit, then tag and push: `git tag vX.Y.Z && git push origin main vX.Y.Z`.
-4. The release workflow checks that the tag matches `package.json` and the changelog, runs
+1. Open a pull request titled `Release vX.Y.Z` that moves the `Unreleased` entries of
+   `CHANGELOG.md` under `## [X.Y.Z] - YYYY-MM-DD`, updates the comparison links at the bottom,
+   and sets `"version": "X.Y.Z"` in `package.json` (`npm version X.Y.Z --no-git-tag-version`
+   updates the lockfile too).
+2. Once it is merged, tag the merge commit on `main` and push the tag:
+   `git switch main && git pull && git tag vX.Y.Z && git push origin vX.Y.Z`.
+3. The release workflow checks that the tag matches `package.json` and the changelog, runs
    every test including the end-to-end suite, publishes to npm with provenance through trusted
-   publishing (environment `npm`), and creates the GitHub release with `pi-keycloak-auth.js`,
-   the `.tgz`, `SHA256SUMS`, and the changelog section as notes.
+   publishing (environment `npm`, no token), then creates the GitHub release (draft, assets,
+   publish) with `pi-keycloak-auth.js`, the `.tgz`, `SHA256SUMS`, and the changelog section as
+   notes.

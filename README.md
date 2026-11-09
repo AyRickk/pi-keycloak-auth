@@ -4,6 +4,7 @@
 [![npm](https://img.shields.io/npm/v/pi-keycloak-auth)](https://www.npmjs.com/package/pi-keycloak-auth)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 ![Node](https://img.shields.io/badge/node-%E2%89%A5%2022.19-brightgreen)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/AyRickk/pi-keycloak-auth/badge)](https://scorecard.dev/viewer/?uri=github.com/AyRickk/pi-keycloak-auth)
 
 Keycloak sign-in for the [pi coding agent](https://pi.dev). Log in once with your
 organization's SSO, then keep working for days: pi sends a short-lived Keycloak **access
