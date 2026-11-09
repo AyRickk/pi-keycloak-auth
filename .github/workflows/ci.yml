@@ -71,7 +71,7 @@ jobs:
       - run: npm run test:e2e
       - name: Real pi check
         run: |
-          python -m pip install --quiet pyte
+          python -m pip install --quiet --require-hashes -r test/pi/requirements.txt
           python test/pi/real-pi-check.py "$RUNNER_TEMP/real-pi"
       - name: Upload pi screen captures
         if: always()

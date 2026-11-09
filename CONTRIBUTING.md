@@ -58,7 +58,7 @@ OpenAI-compatible gateway that logs the `Authorization` header it receives.
 ```sh
 ./scripts/e2e-keycloak.sh up
 npm run build
-python3 -m pip install pyte
+python3 -m pip install --require-hashes -r test/pi/requirements.txt
 python3 test/pi/real-pi-check.py /tmp/real-pi    # prints PASS/FAIL per check, keeps screen captures
 ```
 

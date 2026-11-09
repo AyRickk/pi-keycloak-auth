@@ -24,3 +24,7 @@ updates:
       # Node types follow the minimum supported Node version (22), not the latest Node.
       - dependency-name: "@types/node"
         update-types: ["version-update:semver-major"]
+  - package-ecosystem: pip
+    directory: /test/pi
+    schedule:
+      interval: monthly
