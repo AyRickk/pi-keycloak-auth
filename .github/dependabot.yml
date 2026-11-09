@@ -1,0 +1,20 @@
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      actions:
+        patterns: ["*"]
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      dev-dependencies:
+        dependency-type: development
+        exclude-patterns: ["@earendil-works/*"]
+    ignore:
+      # pi's types are pinned to the version the extension is tested with; bump deliberately.
+      - dependency-name: "@earendil-works/*"

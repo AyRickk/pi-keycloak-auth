@@ -17,7 +17,7 @@
 
 ## Setup
 
-Node ≥ 22.19.
+Node ≥ 22.19 (`.nvmrc` pins the minimum).
 
 ```sh
 npm ci
@@ -62,9 +62,26 @@ python3 -m pip install pyte
 python3 test/pi/real-pi-check.py /tmp/real-pi    # prints PASS/FAIL per check, keeps screen captures
 ```
 
+## Pull requests
+
+- One topic per pull request; describe the user-visible change and link the issue.
+- Add or update tests with the change; run the end-to-end suite when login or refresh
+  behavior changes.
+- Update the README or `docs/` when behavior or configuration changes, and add a line under
+  `## [Unreleased]` in `CHANGELOG.md`.
+- Keep commit messages short and imperative ("Fix device polling interval").
+- CI must be green: typecheck, lint, format, unit and host tests on Linux and macOS with Node
+  22.19 and 24, bundle and package checks, then end-to-end and real pi checks.
+
 ## Releases
 
-1. Update `version` in `package.json` and `CHANGELOG.md`.
-2. Tag `vX.Y.Z` and push the tag. The release workflow checks, builds, publishes to npm with
-   provenance (trusted publishing) and attaches `pi-keycloak-auth.js` and the `.tgz` to a
-   GitHub release.
+Maintainers only.
+
+1. Move the `Unreleased` entries of `CHANGELOG.md` under a new `## [X.Y.Z] - YYYY-MM-DD`
+   heading and update the comparison links at the bottom.
+2. Set `"version": "X.Y.Z"` in `package.json` and run `npm install --package-lock-only`.
+3. Commit, then tag and push: `git tag vX.Y.Z && git push origin main vX.Y.Z`.
+4. The release workflow checks that the tag matches `package.json` and the changelog, runs
+   every test including the end-to-end suite, publishes to npm with provenance through trusted
+   publishing (environment `npm`), and creates the GitHub release with `pi-keycloak-auth.js`,
+   the `.tgz`, `SHA256SUMS`, and the changelog section as notes.

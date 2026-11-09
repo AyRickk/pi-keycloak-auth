@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/AyRickk/pi-keycloak-auth/security/advisories/new
+    about: Report vulnerabilities privately.
+  - name: Question or idea
+    url: https://github.com/AyRickk/pi-keycloak-auth/discussions
+    about: Ask questions and discuss ideas.

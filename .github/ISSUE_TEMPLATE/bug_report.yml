@@ -1,0 +1,46 @@
+name: Bug report
+description: Something does not work as documented
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. **Do not paste tokens, authorization codes or `auth.json`.**
+        Security issues go through [private reporting](https://github.com/AyRickk/pi-keycloak-auth/security/advisories/new) instead.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, what happened instead.
+    validations:
+      required: true
+  - type: dropdown
+    id: method
+    attributes:
+      label: Login method
+      options:
+        - Browser, redirect captured automatically
+        - Browser, paste the redirect URL
+        - Device code
+        - Not login related (refresh, requests, configuration)
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Debug log
+      description: Run `PI_KC_LOG=debug pi`, reproduce, and paste the `[keycloak-auth]` lines.
+      render: text
+  - type: textarea
+    id: config
+    attributes:
+      label: Configuration
+      description: Your `keycloak-auth.json` and `PI_KC_*` variables (hostnames may be anonymized).
+      render: json
+  - type: input
+    id: versions
+    attributes:
+      label: Versions
+      placeholder: "pi-keycloak-auth 0.1.0, pi 1.5.0, Node 22.19, Keycloak 26.4, macOS 15"
+    validations:
+      required: true
