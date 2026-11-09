@@ -7,12 +7,13 @@ export const REALM = "pi-test";
 export const ISSUER = `${KC_URL}/realms/${REALM}`;
 export const USER = { username: "alice", password: "alice" };
 
+// "&amp;" is decoded last so that an encoded entity such as "&amp;quot;" stays "&quot;".
 const decode = (s: string) =>
   s
-    .replace(/&amp;/g, "&")
     .replace(/&#x3D;/g, "=")
     .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'");
+    .replace(/&#39;/g, "'")
+    .replace(/&amp;/g, "&");
 
 export class Browser {
   private cookies = new Map<string, string>();

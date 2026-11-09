@@ -5,7 +5,7 @@ and the fake gateway, and records what the screen shows.
 Prerequisites (see CONTRIBUTING.md):
   ./scripts/e2e-keycloak.sh up            # Keycloak on :18080, realm pi-test
   npm run build                           # dist/index.js
-  python3 -m pip install pyte             # terminal emulator used to read the screen
+  python3 -m pip install --require-hashes -r test/pi/requirements.txt   # pyte, reads the screen
 
 Usage:
   python3 test/pi/real-pi-check.py [output-dir]
