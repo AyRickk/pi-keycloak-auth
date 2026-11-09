@@ -18,3 +18,9 @@ updates:
     ignore:
       # pi's types are pinned to the version the extension is tested with; bump deliberately.
       - dependency-name: "@earendil-works/*"
+      # typescript-eslint supports TypeScript < 6.1 only.
+      - dependency-name: typescript
+        versions: [">=6.1.0"]
+      # Node types follow the minimum supported Node version (22), not the latest Node.
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]

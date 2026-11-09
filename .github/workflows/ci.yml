@@ -24,8 +24,8 @@ jobs:
         os: [ubuntu-latest, macos-latest]
         node: [22.19.0, 24]
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: ${{ matrix.node }}
           cache: npm
@@ -53,12 +53,12 @@ jobs:
     needs: check
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: npm
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
       - run: npm ci
@@ -71,7 +71,7 @@ jobs:
           python test/pi/real-pi-check.py "$RUNNER_TEMP/real-pi"
       - name: Upload pi screen captures
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: real-pi-screens
           path: ${{ runner.temp }}/real-pi/*.txt

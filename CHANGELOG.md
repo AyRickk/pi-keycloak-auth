@@ -6,6 +6,12 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- Development tooling only (no change to the published extension): Vitest 5, ESLint 10,
+  TypeScript 6.0, esbuild 0.28, GitHub Actions v7, and `minimatch` 11 for the linters. The
+  development dependency tree has no known vulnerability.
+
 ## [0.1.0] - 2026-11-09
 
 ### Added
