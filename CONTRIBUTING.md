@@ -120,7 +120,7 @@ git config core.hooksPath .githooks
 Maintainers only. Release tags `v*` can only be created by maintainers and can never be moved
 or deleted; GitHub releases are immutable once published.
 
-1. Open a pull request titled `Release vX.Y.Z` that moves the `Unreleased` entries of
+1. Open a pull request titled `chore(release): vX.Y.Z` that moves the `Unreleased` entries of
    `CHANGELOG.md` under `## [X.Y.Z] - YYYY-MM-DD`, updates the comparison links at the bottom,
    and sets `"version": "X.Y.Z"` in `package.json` (`npm version X.Y.Z --no-git-tag-version`
    updates the lockfile too).
