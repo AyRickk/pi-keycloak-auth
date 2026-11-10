@@ -1,6 +1,12 @@
 /**
- * Configuration: the user's global `keycloak-auth.json` in pi's agent directory,
- * then `PI_KC_*` environment variables, then defaults. Per field, the file wins.
+ * Configuration: the user's global `keycloak-auth.json`, then `PI_KC_*` environment
+ * variables, then defaults. Per field, the file wins.
+ *
+ * The file is `$PI_KC_CONFIG` when set, otherwise `keycloak-auth.json` in the host's agent
+ * directory: `$PI_CODING_AGENT_DIR` when set (both pi and Oh My Pi honour it, and Oh My Pi
+ * sets it for named profiles), else `~/.pi/agent` (pi) or `~/.omp/agent` (Oh My Pi, root
+ * renamed by `PI_CONFIG_DIR`). The running host's directory is tried first, the other one
+ * second, so one file works with both.
  *
  * Project-level configuration is deliberately never read: a repository must not be
  * able to send the user's tokens to another issuer or another gateway.
@@ -14,6 +20,17 @@ export const CONFIG_FILE_NAME = "keycloak-auth.json";
 export const ENV_PREFIX = "PI_KC_";
 /** pi's own override of its agent directory (default `~/.pi/agent`). */
 export const AGENT_DIR_ENV = "PI_CODING_AGENT_DIR";
+/** Full path of the configuration file, bypassing the agent-directory lookup. */
+export const CONFIG_PATH_ENV = "PI_KC_CONFIG";
+/** Oh My Pi's config root directory name under home (default `.omp`). */
+export const OMP_CONFIG_DIR_ENV = "PI_CONFIG_DIR";
+
+export type Host = "pi" | "omp";
+/** Oh My Pi runs on Bun, pi on Node: only a preference, both locations are tried. */
+export const detectHost = (): Host => (typeof process.versions["bun"] === "string" ? "omp" : "pi");
+
+export const LOGIN_METHODS = ["browser", "paste", "device"] as const;
+export type LoginMethod = (typeof LOGIN_METHODS)[number];
 
 export const MODEL_DEFAULTS = { contextWindow: 128_000, maxTokens: 16_384 } as const;
 
@@ -28,6 +45,18 @@ export interface ModelSpec {
   compat?: Record<string, unknown>;
 }
 
+/** A model known only by its id, with the documented defaults. */
+export function defaultModelSpec(id: string): ModelSpec {
+  return {
+    id,
+    name: id,
+    reasoning: false,
+    input: ["text"],
+    ...MODEL_DEFAULTS,
+    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+  };
+}
+
 export interface KeycloakConfig {
   providerId: string;
   issuer: string;
@@ -38,7 +67,12 @@ export interface KeycloakConfig {
   redirectPath: string;
   baseUrl: string;
   headers: Record<string, string>;
+  /** Declared models: the whole catalog, or overrides and fallback when discovering. */
   models: ModelSpec[];
+  /** Fetch the model list from the gateway's `GET <baseUrl>/models` with the access token. */
+  discoverModels: boolean;
+  /** Skip the method menu of `/login` and always use this method. */
+  loginMethod: LoginMethod | undefined;
   refreshLeewaySeconds: number;
   browserTimeoutSeconds: number;
 }
@@ -52,17 +86,36 @@ type Raw = Record<string, unknown>;
 
 export interface LoadOptions {
   env?: Env;
+  host?: Host;
   readFile?: (path: string) => string | undefined;
 }
 
-export function agentDir(env: Env = process.env): string {
+const expandHome = (path: string): string =>
+  path === "~" ? homedir() : path.startsWith("~/") ? join(homedir(), path.slice(2)) : path;
+
+/** At least one path. */
+type Paths = [string, ...string[]];
+
+/** Agent directories to look in, the running host's first. */
+export function agentDirs(env: Env = process.env, host: Host = detectHost()): Paths {
   const dir = env[AGENT_DIR_ENV]?.trim();
-  if (!dir) return join(homedir(), ".pi", "agent");
-  return dir === "~" ? homedir() : dir.startsWith("~/") ? join(homedir(), dir.slice(2)) : dir;
+  if (dir) return [expandHome(dir)];
+  const pi = join(homedir(), ".pi", "agent");
+  const omp = join(homedir(), env[OMP_CONFIG_DIR_ENV]?.trim() || ".omp", "agent");
+  return host === "omp" ? [omp, pi] : [pi, omp];
 }
 
-export function configPath(env: Env = process.env): string {
-  return join(agentDir(env), CONFIG_FILE_NAME);
+/** Configuration files to try, in order. */
+export function configPaths(env: Env = process.env, host: Host = detectHost()): Paths {
+  const explicit = env[CONFIG_PATH_ENV]?.trim();
+  if (explicit) return [expandHome(explicit)];
+  const [first, ...rest] = agentDirs(env, host);
+  return [join(first, CONFIG_FILE_NAME), ...rest.map((dir) => join(dir, CONFIG_FILE_NAME))];
+}
+
+/** Where the configuration is expected when none exists yet: the first candidate. */
+export function configPath(env: Env = process.env, host: Host = detectHost()): string {
+  return configPaths(env, host)[0];
 }
 
 function readOptional(path: string): string | undefined {
@@ -77,13 +130,21 @@ function readOptional(path: string): string | undefined {
 /** Never throws: an invalid configuration yields `{ ok: false }` naming every bad field. */
 export function loadConfig(options: LoadOptions = {}): ConfigResult {
   const env = options.env ?? process.env;
-  const path = configPath(env);
+  const readFile = options.readFile ?? readOptional;
+  const candidates = configPaths(env, options.host);
+  let path = candidates[0];
   const problems: { field: string; message: string }[] = [];
   const fail = (field: string, message: string) => problems.push({ field, message });
 
   let file: Raw = {};
   try {
-    const text = (options.readFile ?? readOptional)(path);
+    let text: string | undefined;
+    for (const candidate of candidates) {
+      path = candidate;
+      text = readFile(candidate);
+      if (text !== undefined) break;
+    }
+    if (text === undefined) path = candidates[0];
     if (text !== undefined && text.trim() !== "") {
       const parsed: unknown = JSON.parse(text);
       if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
@@ -156,13 +217,27 @@ export function loadConfig(options: LoadOptions = {}): ConfigResult {
   const browserTimeoutSeconds = int("browserTimeoutSeconds", "BROWSER_TIMEOUT_SECONDS", 300, 10, 3600);
   const headers = parseHeaders(pick("headers", "HEADERS"), fail);
   const models = parseModels(file["models"] ?? fromEnv("MODELS"), fail);
+  const discoverModels = bool("discoverModels", "DISCOVER_MODELS", models.length === 0);
+  const loginMethodRaw = str("loginMethod", "LOGIN_METHOD");
+  let loginMethod: LoginMethod | undefined;
+  if (loginMethodRaw !== undefined) {
+    const method = loginMethodRaw.toLowerCase();
+    if ((LOGIN_METHODS as readonly string[]).includes(method)) loginMethod = method as LoginMethod;
+    else
+      fail(
+        "loginMethod",
+        `"loginMethod" must be ${LOGIN_METHODS.join(", ")}, got ${JSON.stringify(loginMethodRaw)}.`,
+      );
+  }
 
   const required: [string, unknown, string][] = [
     ["issuer", issuer, "PI_KC_ISSUER"],
     ["clientId", clientId, "PI_KC_CLIENT_ID"],
     ["baseUrl", baseUrl, "PI_KC_BASE_URL"],
-    ["models", models.length > 0 ? models : undefined, "PI_KC_MODELS"],
   ];
+  if (!discoverModels && models.length === 0 && !problems.some((p) => p.field === "models")) {
+    fail("models", `"models" is empty and "discoverModels" is off: declare models or enable discovery.`);
+  }
   for (const [field, value, envName] of required) {
     if (value === undefined && !problems.some((p) => p.field === field)) {
       fail(field, `"${field}" is missing (set it in ${path} or ${envName}).`);
@@ -193,6 +268,8 @@ export function loadConfig(options: LoadOptions = {}): ConfigResult {
       baseUrl,
       headers,
       models,
+      discoverModels,
+      loginMethod,
       refreshLeewaySeconds,
       browserTimeoutSeconds,
     },

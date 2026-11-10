@@ -6,9 +6,27 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Oh My Pi support from the same package: the configuration is found in `~/.omp/agent` (or
+  `~/$PI_CONFIG_DIR/agent`, or the profile folder through `PI_CODING_AGENT_DIR`), `/login` asks
+  the method as text where no menu exists and shows the device code in the login dialog, and
+  RPC mode falls back to the recommended method.
+- Model discovery: without `models`, or with `discoverModels: true`, the list comes from the
+  gateway's `GET <baseUrl>/models` called with the Keycloak access token. Declared models
+  describe discovered ones by id. pi keeps the list in `models-store.json` for print mode and
+  offline starts; Oh My Pi keeps it in its model cache.
+- `PI_KC_CONFIG`: full path of the configuration file.
+- `loginMethod` / `PI_KC_LOGIN_METHOD`: skip the method choice of `/login`.
+
 ### Changed
 
-- Development tooling only (no change to the published extension): Vitest 5, ESLint 10,
+- `models` is no longer required.
+- The configuration file is looked up in the running agent's folder first, then in the other
+  agent's folder.
+- The bundle is now 40 KiB (32 KiB before).
+
+- Development tooling: Vitest 5, ESLint 10,
   TypeScript 6.0, esbuild 0.28, GitHub Actions v7, and `minimatch` 11 for the linters. The
   development dependency tree has no known vulnerability.
 

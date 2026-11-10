@@ -2,7 +2,9 @@
 
 How the extension plugs into pi, what pi does on its own, and what the extension adds. Facts
 about pi below were verified in the pi 1.5.0 source and with tests that run the extension
-inside pi's real auth pipeline (`test/host/`).
+inside pi's real auth pipeline and model registry (`test/host/`). Oh My Pi (verified with
+18.18.6 and `test/omp/real-omp-check.mjs`) loads the same bundle; its differences are in
+[Oh My Pi](#oh-my-pi).
 
 ## Modules
 
@@ -10,7 +12,8 @@ inside pi's real auth pipeline (`test/host/`).
 | ------------------------ | ---------------------------------------------------------------------------------------- |
 | `src/index.ts`           | Extension entry: loads the configuration, registers the provider, wires UI notifications |
 | `src/config.ts`          | Global config file + `PI_KC_*` environment, validation, error mode details               |
-| `src/provider.ts`        | Builds the `pi.registerProvider()` configuration (normal or error mode)                  |
+| `src/provider.ts`        | Builds the `pi.registerProvider()` configuration (normal or error mode), model hooks     |
+| `src/models.ts`          | Model discovery: `GET <baseUrl>/models`, merge with declared models, token memo          |
 | `src/login.ts`           | `/login`: method choice, browser (auto-capture / paste) and device flows                 |
 | `src/callback-server.ts` | One-shot loopback HTTP server receiving the redirect                                     |
 | `src/refresh.ts`         | `refreshToken`: leeway, single-flight, rotation grace, error policy                      |
@@ -28,6 +31,26 @@ the gateway `baseUrl`, optional static `headers`, the configured `models`, and a
 object with `login`, `refreshToken` and `getApiKey`. pi lists the provider in `/login`, stores
 what `login` returns in `~/.pi/agent/auth.json`, and sends `getApiKey(credentials)` (the access
 token) as `Authorization: Bearer`.
+
+## Model discovery
+
+With `discoverModels` (the default when no `models` are declared) the provider carries two
+hooks; each agent calls its own and ignores the other.
+
+- **pi, `refreshModels(context)`.** pi calls it in two phases. Offline (`allowNetwork: false`,
+  every start and after `/login`): the extension returns the catalog it persisted earlier
+  (`context.stored`, from `~/.pi/agent/models-store.json`), else the declared models. Online
+  (interactive start and `/model`, only with a stored credential): pi has refreshed the OAuth
+  credential first, so the extension calls `GET <baseUrl>/models` with that access token,
+  persists the result through `context.publish({ persist })` and returns it. A failure rejects
+  and pi keeps the previous list. `pi -p` and `--list-models` never run the online phase.
+- **Oh My Pi, `fetchDynamicModels(apiKey)`.** Called after `/login` and when its 24-hour
+  model cache expires. `apiKey` is the stored access token _without_ refresh, `undefined` once
+  expired. The extension then falls back to the latest still-valid token it saw through
+  `login`, `refreshToken` or `getApiKey`; with none it throws, which makes Oh My Pi keep its
+  cached list (returning `[]` would empty it).
+
+Discovered ids are described by the declared model of the same id, else by the defaults.
 
 ## Request flow
 
@@ -84,12 +107,30 @@ pi opens a browser for every authorization URL it is given. When no local browse
 the extension prints the URL instead, puts the device method first, and asks pi not to open a
 browser for the device page.
 
+## Oh My Pi
+
+Oh My Pi reads `pi.extensions` from `package.json` and calls the same `registerProvider`,
+`on("session_start" | "session_shutdown")`, `ctx.hasUI` and `ctx.ui.notify`. Differences the
+extension handles:
+
+| Topic           | pi                                    | Oh My Pi                                                                           |
+| --------------- | ------------------------------------- | ---------------------------------------------------------------------------------- |
+| Agent folder    | `~/.pi/agent`                         | `~/.omp/agent`, `PI_CONFIG_DIR` renames `.omp`, profiles set `PI_CODING_AGENT_DIR` |
+| Method choice   | `onSelect` menu                       | no `onSelect`: asked with `onPrompt`; RPC mode refuses it, recommended method used |
+| Device code     | `onDeviceCode`                        | no `onDeviceCode`: URL and code through `onAuth` (or `onProgress` headless)        |
+| `refreshToken`  | receives an abort signal              | no signal                                                                          |
+| Model discovery | `refreshModels`, refreshed credential | `fetchDynamicModels`, unrefreshed stored token                                     |
+| Credentials     | `~/.pi/agent/auth.json`               | the agent database under `~/.omp/agent`                                            |
+
+The runtime (Bun for Oh My Pi, Node for pi) decides which agent folder is tried first; the
+other is tried second, so a single file serves both.
+
 ## Error mode
 
 With a missing or invalid setting the provider is still registered, named
 _Keycloak (not configured)_, pointing at `https://not-configured.invalid`, and its `login`,
 `refreshToken` and `getApiKey` throw the message listing the bad fields, without any network
-call. The message is also shown when a pi session starts.
+call. The message is also shown when a session starts.
 
 ## Test layers
 
@@ -99,3 +140,4 @@ call. The message is also shown when a pi session starts.
 | Host       | `npm run test:host`                | the provider in pi's real auth pipeline and file store                         |
 | End-to-end | `npm run test:e2e`                 | real Keycloak: three logins, real expiry, strict rotation, SSO session expiry  |
 | Real pi    | `python3 test/pi/real-pi-check.py` | the pi terminal UI end to end, with a gateway that logs the Bearer it receives |
+| Real omp   | `node test/omp/real-omp-check.mjs` | Oh My Pi in RPC mode: both logins, discovery, chat, refresh, restart           |

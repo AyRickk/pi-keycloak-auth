@@ -9,10 +9,15 @@
  * pi opens a browser for every `onAuth` URL. Without a local browser (SSH, container,
  * CI, no display) the URL is shown through `onProgress` instead, and the device flow
  * is listed first.
+ *
+ * Oh My Pi provides neither `onSelect` nor `onDeviceCode`: the method is then asked with
+ * `onPrompt` (Enter keeps the recommended one), and the device code is shown with the
+ * verification URL through `onAuth`. `loginMethod` in the configuration skips the choice
+ * on every host.
  */
-import type { OAuthLoginCallbacks } from "./pi-types.js";
+import type { LoginCallbacks } from "./pi-types.js";
 import { startCallbackServer, PortInUseError, type CallbackServer } from "./callback-server.js";
-import { redirectUri, type KeycloakConfig } from "./config.js";
+import { LOGIN_METHODS, redirectUri, type KeycloakConfig, type LoginMethod } from "./config.js";
 import { describe } from "./errors.js";
 import { log } from "./log.js";
 import {
@@ -26,7 +31,7 @@ import {
 import { createPkce, createState, stateMatches } from "./pkce.js";
 import { toCredentials, type Credentials } from "./refresh.js";
 
-export type LoginMethod = "browser" | "paste" | "device";
+export type { LoginMethod };
 
 export interface LoginDeps {
   net?: Net;
@@ -61,12 +66,12 @@ export function createLogin(config: KeycloakConfig, deps: LoginDeps = {}) {
   // A newer attempt frees the port held by an abandoned one.
   let activeServer: CallbackServer | undefined;
 
-  const showUrl = (callbacks: OAuthLoginCallbacks, url: string, instructions: string) => {
+  const showUrl = (callbacks: LoginCallbacks, url: string, instructions: string) => {
     if (deps.headless) callbacks.onProgress?.(`${instructions}\nOpen this URL in a browser:\n${url}`);
     else callbacks.onAuth({ url, instructions });
   };
 
-  async function browser(callbacks: OAuthLoginCallbacks): Promise<Credentials> {
+  async function browser(callbacks: LoginCallbacks): Promise<Credentials> {
     activeServer?.close(new Error("Superseded by a newer login attempt."));
     activeServer = undefined;
     const pkce = createPkce();
@@ -107,7 +112,7 @@ export function createLogin(config: KeycloakConfig, deps: LoginDeps = {}) {
     }
   }
 
-  async function paste(callbacks: OAuthLoginCallbacks): Promise<Credentials> {
+  async function paste(callbacks: LoginCallbacks): Promise<Credentials> {
     const pkce = createPkce();
     const state = createState();
     const uri = redirectUri(config, config.callbackPort || 49170);
@@ -117,11 +122,14 @@ export function createLogin(config: KeycloakConfig, deps: LoginDeps = {}) {
       "Sign in with Keycloak. The browser then fails to load the redirect page: " +
         "copy the full URL from its address bar and paste it here.",
     );
-    const input = (
-      callbacks.onManualCodeInput
-        ? await callbacks.onManualCodeInput()
-        : await callbacks.onPrompt({ message: "Paste the redirect URL (or the authorization code)" })
-    ).trim();
+    const { onManualCodeInput, onPrompt } = callbacks;
+    const ask = onManualCodeInput
+      ? () => onManualCodeInput()
+      : onPrompt
+        ? () => onPrompt({ message: "Paste the redirect URL (or the authorization code)" })
+        : undefined;
+    if (!ask) throw new Error("This host cannot ask for the redirect URL: use the browser or device method.");
+    const input = (await ask()).trim();
     if (!input) throw new Error("No authorization code entered.");
     let code = input;
     if (/^https?:\/\//i.test(input)) {
@@ -140,16 +148,21 @@ export function createLogin(config: KeycloakConfig, deps: LoginDeps = {}) {
     );
   }
 
-  async function device(callbacks: OAuthLoginCallbacks): Promise<Credentials> {
+  async function device(callbacks: LoginCallbacks): Promise<Credentials> {
     const pkce = createPkce();
     const auth = await startDeviceAuthorization(config, pkce, net, callbacks.signal);
-    callbacks.onDeviceCode({
-      userCode: auth.userCode,
-      verificationUri: auth.verificationUriComplete ?? auth.verificationUri,
-      openBrowserOnConfirm: !deps.headless,
-      intervalSeconds: auth.intervalSeconds,
-      expiresInSeconds: Math.max(0, Math.round((auth.expiresAt - net.now()) / 1000)),
-    });
+    const verificationUri = auth.verificationUriComplete ?? auth.verificationUri;
+    if (callbacks.onDeviceCode) {
+      callbacks.onDeviceCode({
+        userCode: auth.userCode,
+        verificationUri,
+        openBrowserOnConfirm: !deps.headless,
+        intervalSeconds: auth.intervalSeconds,
+        expiresInSeconds: Math.max(0, Math.round((auth.expiresAt - net.now()) / 1000)),
+      });
+    } else {
+      showUrl(callbacks, verificationUri, `Confirm the code ${auth.userCode} on the Keycloak page.`);
+    }
     let interval = auth.intervalSeconds;
     while (net.now() < auth.expiresAt) {
       await sleep(interval * 1000, callbacks.signal);
@@ -165,22 +178,49 @@ export function createLogin(config: KeycloakConfig, deps: LoginDeps = {}) {
     throw new Error("The device code expired before the sign-in was completed. Run /login again.");
   }
 
-  const flows: Record<LoginMethod, (c: OAuthLoginCallbacks) => Promise<Credentials>> = {
+  const flows: Record<LoginMethod, (c: LoginCallbacks) => Promise<Credentials>> = {
     browser,
     paste,
     device,
   };
 
-  return async function login(callbacks: OAuthLoginCallbacks): Promise<Credentials> {
-    const order: LoginMethod[] = deps.headless
-      ? ["device", "browser", "paste"]
-      : ["browser", "paste", "device"];
-    const choice = await callbacks.onSelect({
-      message: deps.headless
-        ? `Sign in to Keycloak (${deps.headless}: the device code is recommended)`
-        : "Sign in to Keycloak",
-      options: order.map((id, i) => ({ id, label: i === 0 ? `${LABELS[id]} — recommended` : LABELS[id] })),
-    });
+  async function choose(callbacks: LoginCallbacks): Promise<string | undefined> {
+    if (config.loginMethod) return config.loginMethod;
+    const recommended: LoginMethod = deps.headless ? "device" : "browser";
+    const order: LoginMethod[] = [recommended, ...LOGIN_METHODS.filter((m) => m !== recommended)];
+    const title = deps.headless
+      ? `Sign in to Keycloak (${deps.headless}: the device code is recommended)`
+      : "Sign in to Keycloak";
+    if (callbacks.onSelect) {
+      return callbacks.onSelect({
+        message: title,
+        options: order.map((id, i) => ({ id, label: i === 0 ? `${LABELS[id]} — recommended` : LABELS[id] })),
+      });
+    }
+    if (!callbacks.onPrompt) return recommended;
+    let reply: string;
+    try {
+      reply = await callbacks.onPrompt({
+        message: `${title}. Method: ${order.join(", ")} (Enter for ${recommended})`,
+        placeholder: recommended,
+        allowEmpty: true,
+      });
+    } catch (error) {
+      // Oh My Pi's RPC mode refuses any prompt before a sign-in URL: use the recommended
+      // method. A cancelled login stays cancelled.
+      if (callbacks.signal?.aborted) throw error;
+      log.info(`method prompt unavailable (${describe(error)}); using ${recommended}`);
+      return recommended;
+    }
+    const answer = reply.trim().toLowerCase();
+    if (!answer) return recommended;
+    const method = LOGIN_METHODS.find((m) => m.startsWith(answer));
+    if (!method) throw new Error(`Unknown login method "${answer}": use ${LOGIN_METHODS.join(", ")}.`);
+    return method;
+  }
+
+  return async function login(callbacks: LoginCallbacks): Promise<Credentials> {
+    const choice = await choose(callbacks);
     if (!choice) throw new Error("Login cancelled.");
     const flow = flows[choice as LoginMethod];
     if (!flow) throw new Error(`Unknown login method "${choice}".`);

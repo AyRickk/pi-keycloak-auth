@@ -29,6 +29,8 @@ export function testConfig(overrides: Partial<KeycloakConfig> = {}): KeycloakCon
         cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
       },
     ],
+    discoverModels: false,
+    loginMethod: undefined,
     refreshLeewaySeconds: 30,
     browserTimeoutSeconds: 300,
     ...overrides,
@@ -38,6 +40,7 @@ export function testConfig(overrides: Partial<KeycloakConfig> = {}): KeycloakCon
 export interface Call {
   url: string;
   form: URLSearchParams;
+  authorization: string | null;
 }
 
 type Reply = { status?: number; body?: unknown } | Error;
@@ -48,7 +51,11 @@ export function fakeKeycloak(handler: Handler) {
   let now = 1_700_000_000_000;
   const calls: Call[] = [];
   const fetchImpl = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-    const call = { url: String(input), form: new URLSearchParams(String(init?.body ?? "")) };
+    const call = {
+      url: String(input),
+      form: new URLSearchParams(String(init?.body ?? "")),
+      authorization: new Headers(init?.headers).get("authorization"),
+    };
     calls.push(call);
     if (init?.signal?.aborted) throw init.signal.reason;
     const reply = await handler(call);

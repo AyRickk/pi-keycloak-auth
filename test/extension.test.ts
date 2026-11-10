@@ -80,14 +80,14 @@ describe("extension", () => {
     expect(config.name).toMatch(/not configured/);
     expect(config.baseUrl).toBe(NOT_CONFIGURED_URL);
     expect(new URL(config.baseUrl!).hostname.endsWith(".invalid")).toBe(true);
-    await expect(config.oauth!.login(callbacks())).rejects.toThrow(/clientId, baseUrl, models/);
+    await expect(config.oauth!.login(callbacks())).rejects.toThrow(/clientId, baseUrl\./);
     await expect(
       config.oauth!.refreshToken({ access: "a", refresh: "r", expires: 0 }, new AbortController().signal),
     ).rejects.toThrow(/not configured/);
     expect(() => config.oauth!.getApiKey({ access: "a", refresh: "r", expires: 0 })).toThrow(
       /not configured/,
     );
-    expect(notify).toHaveBeenCalledWith(expect.stringMatching(/clientId, baseUrl, models/), "error");
+    expect(notify).toHaveBeenCalledWith(expect.stringMatching(/clientId, baseUrl\./), "error");
     expect(logs.some((l) => l.startsWith("[keycloak-auth] warn:") && l.includes("error mode"))).toBe(true);
   });
 

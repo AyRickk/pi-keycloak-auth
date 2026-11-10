@@ -1,7 +1,7 @@
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
-import { configPath, loadConfig, MODEL_DEFAULTS } from "../src/config.js";
+import { configPath, configPaths, loadConfig, MODEL_DEFAULTS } from "../src/config.js";
 
 const ENV_MIN = {
   PI_KC_ISSUER: "https://sso.example.test/realms/dev/",
@@ -14,13 +14,35 @@ const load = (env: Record<string, string | undefined>, file?: unknown) =>
   loadConfig({ env, readFile: () => (file === undefined ? undefined : JSON.stringify(file)) });
 
 describe("config", () => {
-  it("reads only the global file in pi's agent directory", () => {
+  const PI_FILE = join(homedir(), ".pi", "agent", "keycloak-auth.json");
+  const OMP_FILE = join(homedir(), ".omp", "agent", "keycloak-auth.json");
+
+  it("reads only global files: the running host's agent directory first, then the other's", () => {
     const readFile = vi.fn(() => undefined);
-    loadConfig({ env: {}, readFile });
-    expect(readFile).toHaveBeenCalledTimes(1);
-    expect(readFile).toHaveBeenCalledWith(join(homedir(), ".pi", "agent", "keycloak-auth.json"));
+    const result = loadConfig({ env: {}, host: "pi", readFile });
+    expect(readFile.mock.calls).toEqual([[PI_FILE], [OMP_FILE]]);
+    expect(result.source).toBe(PI_FILE);
+    expect(configPaths({}, "omp")).toEqual([OMP_FILE, PI_FILE]);
+  });
+
+  it("uses the second location when only it has a file, and names it", () => {
+    const readFile = vi.fn((path: string) => (path === OMP_FILE ? JSON.stringify({}) : undefined));
+    const result = loadConfig({ env: ENV_MIN, host: "pi", readFile });
+    expect(result.ok).toBe(true);
+    expect(result.source).toBe(OMP_FILE);
+  });
+
+  it("honours PI_KC_CONFIG, PI_CODING_AGENT_DIR and Oh My Pi's PI_CONFIG_DIR", () => {
+    expect(configPaths({ PI_KC_CONFIG: "~/kc.json", PI_CODING_AGENT_DIR: "/srv/pi" })).toEqual([
+      join(homedir(), "kc.json"),
+    ]);
     expect(configPath({ PI_CODING_AGENT_DIR: "/srv/pi" })).toBe("/srv/pi/keycloak-auth.json");
-    expect(configPath({ PI_CODING_AGENT_DIR: "~/alt" })).toBe(join(homedir(), "alt", "keycloak-auth.json"));
+    expect(configPaths({ PI_CODING_AGENT_DIR: "~/alt" }, "omp")).toEqual([
+      join(homedir(), "alt", "keycloak-auth.json"),
+    ]);
+    expect(configPath({ PI_CONFIG_DIR: ".omp-work" }, "omp")).toBe(
+      join(homedir(), ".omp-work", "agent", "keycloak-auth.json"),
+    );
   });
 
   it("builds a complete config from the environment with defaults", () => {
@@ -92,13 +114,45 @@ describe("config", () => {
     if (!bad.ok) expect(bad.error.fields).toEqual(["headers"]);
   });
 
-  it("names every missing field, models included (no default model)", () => {
+  it("names every missing field", () => {
     const result = load({});
     expect(result.ok).toBe(false);
     if (result.ok) return;
-    expect(result.error.fields).toEqual(["issuer", "clientId", "baseUrl", "models"]);
-    expect(result.error.message).toContain("PI_KC_MODELS");
+    expect(result.error.fields).toEqual(["issuer", "clientId", "baseUrl"]);
+    expect(result.error.message).toContain("PI_KC_BASE_URL");
     expect(result.providerId).toBe("keycloak");
+  });
+
+  it("discovers models when none is declared, and not otherwise unless asked", () => {
+    const noModels = { ...ENV_MIN, PI_KC_MODELS: undefined };
+    const discovered = load(noModels);
+    if (!discovered.ok) throw discovered.error;
+    expect(discovered.config).toMatchObject({ models: [], discoverModels: true });
+
+    const declared = load(ENV_MIN);
+    if (!declared.ok) throw declared.error;
+    expect(declared.config.discoverModels).toBe(false);
+
+    const both = load(ENV_MIN, { discoverModels: true });
+    if (!both.ok) throw both.error;
+    expect(both.config.discoverModels).toBe(true);
+    expect(both.config.models).toHaveLength(2);
+
+    const neither = load({ ...noModels, PI_KC_DISCOVER_MODELS: "false" });
+    expect(neither.ok).toBe(false);
+    if (!neither.ok) expect(neither.error.fields).toEqual(["models"]);
+  });
+
+  it("reads loginMethod and rejects unknown methods", () => {
+    const ok = load({ ...ENV_MIN, PI_KC_LOGIN_METHOD: "Device" });
+    if (!ok.ok) throw ok.error;
+    expect(ok.config.loginMethod).toBe("device");
+    const none = load(ENV_MIN);
+    if (!none.ok) throw none.error;
+    expect(none.config.loginMethod).toBeUndefined();
+    const bad = load(ENV_MIN, { loginMethod: "magic" });
+    expect(bad.ok).toBe(false);
+    if (!bad.ok) expect(bad.error.fields).toEqual(["loginMethod"]);
   });
 
   it("keeps the provider id and models in error mode", () => {

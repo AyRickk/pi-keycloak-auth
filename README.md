@@ -6,10 +6,10 @@
 ![Node](https://img.shields.io/badge/node-%E2%89%A5%2022.19-brightgreen)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/AyRickk/pi-keycloak-auth/badge)](https://scorecard.dev/viewer/?uri=github.com/AyRickk/pi-keycloak-auth)
 
-Keycloak sign-in for the [pi coding agent](https://pi.dev). Log in once with your
-organization's SSO, then keep working for days: pi sends a short-lived Keycloak **access
-token** to your OpenAI-compatible LLM gateway and refreshes it automatically, with no restart
-and no new login.
+Keycloak sign-in for the [pi coding agent](https://pi.dev) and [Oh My Pi](https://omp.sh). Log
+in once with your organization's SSO, then keep working for days: the agent sends a short-lived
+Keycloak **access token** to your OpenAI-compatible LLM gateway and refreshes it automatically,
+with no restart and no new login.
 
 - **Three login methods** for a public client with PKCE (S256), never a client secret:
   browser with automatic redirect capture, browser with a pasted redirect URL, and device code
@@ -17,8 +17,10 @@ and no new login.
 - **Offline tokens** by default: a session survives nights, weekends and SSO session expiry.
 - **Automatic refresh** through pi, safe with single-use (rotated) refresh tokens, and resilient
   to Keycloak or network hiccups.
-- **OpenAI-compatible provider** with models you declare and optional static headers.
-- **No runtime dependency**: Node built-ins and the global `fetch`. One 32 KiB file, installable
+- **OpenAI-compatible provider** whose models are read from the gateway's `/v1/models` with
+  your token, or declared by you, plus optional static headers.
+- **pi and Oh My Pi** from the same package and the same configuration file.
+- **No runtime dependency**: Node built-ins and the global `fetch`. One 40 KiB file, installable
   offline.
 
 ## Contents
@@ -38,11 +40,11 @@ and no new login.
 
 ## Requirements
 
-| Component                              | Version                            |
-| -------------------------------------- | ---------------------------------- |
-| pi (`@earendil-works/pi-coding-agent`) | tested with **1.5.0**              |
-| Node.js                                | **≥ 22.19** (pi's own requirement) |
-| Keycloak                               | 22 or later, tested with **26.4**  |
+| Component                                 | Version                                    |
+| ----------------------------------------- | ------------------------------------------ |
+| pi (`@earendil-works/pi-coding-agent`)    | tested with **1.5.0**, on Node **≥ 22.19** |
+| or Oh My Pi (`@oh-my-pi/pi-coding-agent`) | tested with **18.18.6**, on Bun            |
+| Keycloak                                  | 22 or later, tested with **26.4**          |
 
 ## Quick start
 
@@ -50,21 +52,23 @@ and no new login.
 2. Install the extension:
 
    ```sh
-   pi install npm:pi-keycloak-auth
+   pi install npm:pi-keycloak-auth          # pi
+   omp plugin install pi-keycloak-auth      # Oh My Pi
    ```
 
-3. Create `~/.pi/agent/keycloak-auth.json`:
+3. Create `~/.pi/agent/keycloak-auth.json` (pi) or `~/.omp/agent/keycloak-auth.json` (Oh My
+   Pi); either agent also finds the other one's file:
 
    ```json
    {
      "issuer": "https://sso.example.com/realms/engineering",
      "clientId": "pi",
-     "baseUrl": "https://llm-gateway.example.com/v1",
-     "models": ["qwen3-coder"]
+     "baseUrl": "https://llm-gateway.example.com/v1"
    }
    ```
 
-4. Start `pi`, run `/login keycloak`, sign in, then pick the model with `/model`.
+4. Start `pi` (or `omp`), run `/login keycloak`, sign in, then pick a model with `/model`. The
+   list comes from your gateway's `GET /v1/models`, called with your Keycloak token.
 
 ## Installation
 
@@ -105,14 +109,33 @@ cp pi-keycloak-auth.js ~/.pi/agent/extensions/
 Update or remove the extension with `pi update` / `pi remove` in the first two modes, or by
 replacing or deleting the file in the third.
 
+### With Oh My Pi
+
+Oh My Pi loads the same package; nothing differs but the commands and its agent folder,
+`~/.omp/agent`:
+
+```sh
+omp plugin install pi-keycloak-auth             # from npm
+omp plugin link ./package                       # an extracted tarball or a clone (built)
+cp pi-keycloak-auth.js ~/.omp/agent/extensions/ # the single file
+```
+
 ## Configuration
 
-Settings come from `~/.pi/agent/keycloak-auth.json` (inside `$PI_CODING_AGENT_DIR` when that is
-set) and from `PI_KC_*` environment variables. **For each option the file wins over the
-environment, which wins over the default.**
+Settings come from one global file, `keycloak-auth.json`, and from `PI_KC_*` environment
+variables. **For each option the file wins over the environment, which wins over the default.**
 
-Only this global file is read. Project-level configuration is never consulted, so a repository
-you open cannot send your tokens to another issuer or gateway.
+The file is the first one found of:
+
+1. `$PI_KC_CONFIG`, a full path; when set, nothing else is tried.
+2. `$PI_CODING_AGENT_DIR/keycloak-auth.json` when that variable is set. Oh My Pi sets it for
+   named profiles (`omp --profile work`), so each profile has its own file.
+3. Otherwise the running agent's folder, then the other agent's: `~/.pi/agent` for pi,
+   `~/.omp/agent` for Oh My Pi (`~/$PI_CONFIG_DIR/agent` if you renamed its folder). One file
+   therefore serves both agents.
+
+Project-level configuration is never consulted, so a repository you open cannot send your
+tokens to another issuer or gateway.
 
 ```json
 {
@@ -120,6 +143,7 @@ you open cannot send your tokens to another issuer or gateway.
   "clientId": "pi",
   "baseUrl": "https://llm-gateway.example.com/v1",
   "headers": { "X-Client": "pi" },
+  "discoverModels": true,
   "models": [
     { "id": "qwen3-coder", "name": "Qwen3 Coder", "contextWindow": 262144, "maxTokens": 32768 },
     { "id": "gpt-oss-120b", "reasoning": true }
@@ -132,7 +156,8 @@ you open cannot send your tokens to another issuer or gateway.
 | `issuer`                | `PI_KC_ISSUER`                  | **required** | Realm URL, `https://<host>/realms/<realm>`                                              |
 | `clientId`              | `PI_KC_CLIENT_ID`               | **required** | Public client id                                                                        |
 | `baseUrl`               | `PI_KC_BASE_URL`                | **required** | Gateway base URL, the one ending in `/v1`                                               |
-| `models`                | `PI_KC_MODELS`                  | **required** | Models served by the gateway, see [Models](#models)                                     |
+| `models`                | `PI_KC_MODELS`                  | none         | Models, or details of discovered ones, see [Models](#models)                            |
+| `discoverModels`        | `PI_KC_DISCOVER_MODELS`         | see Models   | Read the model list from `GET <baseUrl>/models`                                         |
 | `providerId`            | `PI_KC_PROVIDER_ID`             | `keycloak`   | pi provider id: `/login <providerId>`, `<providerId>/<model>`                           |
 | `scopes`                | `PI_KC_SCOPES`                  | `openid`     | Extra scopes, array or space/comma separated. `openid` is always sent                   |
 | `offlineAccess`         | `PI_KC_OFFLINE_ACCESS`          | `true`       | Adds the `offline_access` scope                                                         |
@@ -142,26 +167,49 @@ you open cannot send your tokens to another issuer or gateway.
 | `redirectPath`          | `PI_KC_REDIRECT_PATH`           | `/callback`  | Path of the redirect URI                                                                |
 | `refreshLeewaySeconds`  | `PI_KC_REFRESH_LEEWAY_SECONDS`  | `30`         | Call Keycloak once the access token has less than this left                             |
 | `browserTimeoutSeconds` | `PI_KC_BROWSER_TIMEOUT_SECONDS` | `300`        | How long a browser login waits for the redirect                                         |
+| `loginMethod`           | `PI_KC_LOGIN_METHOD`            | ask          | `browser`, `paste` or `device`: `/login` uses it without asking                         |
+| —                       | `PI_KC_CONFIG`                  | see above    | Full path of the configuration file                                                     |
 | —                       | `PI_KC_LOG`                     | `warn`       | `silent`, `error`, `warn`, `info` or `debug`                                            |
 
 ### Models
 
-Models are always declared by you: nothing is discovered and there is no default model.
+With no `models`, the list is **discovered**: the extension calls the gateway's
+`GET <baseUrl>/models` (the OpenAI model list) with your Keycloak access token and your static
+headers, and offers every id it returns. With `models` declared, only those are offered, unless
+`discoverModels` is `true`.
+
+When both are used, the gateway decides which models exist and `models` describes them: a
+discovered id takes the context window, output limit, reasoning, input and cost of the declared
+model with the same id. Declared models the gateway does not list are dropped, and the declared
+list is what is shown before the first discovery.
 
 - **In the file**, each entry is a string (the id) or an object with `id` and optionally
   `name`, `contextWindow`, `maxTokens`, `reasoning`, `input` (`["text"]` or
   `["text", "image"]`), `cost` (`{ input, output, cacheRead, cacheWrite }` in dollars per
   million tokens) and `compat` (pi's OpenAI compatibility flags, passed through as is).
-- **`PI_KC_MODELS`** takes ids only, comma separated (`PI_KC_MODELS=qwen3-coder,gpt-oss-120b`),
-  with these defaults: `contextWindow` **128000**, `maxTokens` **16384**, `input: ["text"]`,
-  `reasoning: false`, cost 0. Use the file to set real values.
+- **`PI_KC_MODELS`** takes ids only, comma separated (`PI_KC_MODELS=qwen3-coder,gpt-oss-120b`).
+- A model known only by its id, declared or discovered, gets `contextWindow` **128000**,
+  `maxTokens` **16384**, `input: ["text"]`, `reasoning: false` and cost 0. Declare it in the file
+  to set real values: the OpenAI model list carries no such details.
+
+When the list is fetched:
+
+| Agent    | Fetched                                                                            | Between fetches                                                              |
+| -------- | ---------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| pi       | at each interactive start and when `/model` opens, with a token pi refreshes first | kept in `~/.pi/agent/models-store.json`, used by `pi -p` and `--list-models` |
+| Oh My Pi | right after `/login`, then when its 24-hour model cache expires                    | kept in its model cache                                                      |
+
+A failed fetch (gateway down, 401) keeps the previous list and logs a warning. Oh My Pi hands
+the extension the stored token without refreshing it; with Keycloak's short tokens that one has
+usually expired at the next start, so the extension uses the latest valid token it has seen in
+the session, or keeps the cached list. In practice the list is refreshed at each login and
+whenever the cache expires during a working session.
 
 ### Incomplete configuration
 
 The provider is still registered, as **Keycloak (not configured)**, so it never silently
 disappears. pi shows a message at startup, and `/login` and requests fail with it; it names
-the missing or invalid fields and the config file, e.g. `invalid or missing clientId, baseUrl,
-models`. In this mode the provider points at `https://not-configured.invalid`, a reserved name
+the missing or invalid fields and the config file, e.g. `invalid or missing clientId, baseUrl`. In this mode the provider points at `https://not-configured.invalid`, a reserved name
 that never resolves, and sends nothing anywhere.
 
 ## Logging in
@@ -177,11 +225,18 @@ that never resolves, and sends nothing anywhere.
 - Without a local browser, pi never tries to open one: URLs are printed instead.
 - If the callback port is taken, the browser method switches to the paste method by itself.
 - Starting a new login frees the port held by an abandoned one.
+- `loginMethod` skips the question and always uses that method.
+- **Oh My Pi** has no menu for this question: it is asked as text (`browser`, `paste` or
+  `device`; Enter keeps the recommended one, a prefix such as `d` is enough), and the device
+  code is shown with its URL in the login dialog. Oh My Pi's RPC mode, used by editor
+  integrations, cannot ask before showing a URL: there the recommended method is used, or
+  `loginMethod`.
 - On a brand-new pi setup, pi then prints `Logged in to Keycloak (keycloak), but no default
 model is configured for provider "keycloak". Use /model to select a model.` This is expected:
   choose a model with `/model`, or set `defaultProvider` / `defaultModel` in pi's settings.
 
-pi stores the credentials in `~/.pi/agent/auth.json` (mode `0600`). `/logout` removes them.
+pi stores the credentials in `~/.pi/agent/auth.json` (mode `0600`), Oh My Pi in its agent
+database under `~/.omp/agent`. `/logout` removes them.
 
 ## Keycloak client
 
@@ -251,18 +306,21 @@ net, anything token-shaped in a log line is masked to at most its last four char
 
 ## Troubleshooting
 
-| Symptom                                                          | Cause and fix                                                                                                                                                                                                                |
-| ---------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `not_allowed: Offline tokens not allowed for the user or client` | The user lacks the `offline_access` role, or the scope is not assigned to the client. Fix the realm, or set `offlineAccess: false` (sessions then end with the SSO session)                                                  |
-| `invalid_grant` after a long pause                               | Offline session expired or revoked, or SSO session ended with `offlineAccess: false`. Run `/login keycloak`                                                                                                                  |
-| Keycloak page _Invalid parameter: redirect_uri_                  | Add the exact redirect URI to the client (or `http://127.0.0.1/*` with `callbackPort: 0`)                                                                                                                                    |
-| `unauthorized_client` with the device method                     | Enable _OAuth 2.0 Device Authorization Grant_ on the client                                                                                                                                                                  |
-| `Port 49170 on 127.0.0.1 is already in use`                      | Another program holds the port; the login falls back to pasting. Or set `callbackPort: 0`                                                                                                                                    |
-| Provider shown as _Keycloak (not configured)_                    | Read the message: it lists the fields to fix and the config file path                                                                                                                                                        |
-| `no default model is configured for provider "keycloak"`         | Expected after the first login on a fresh setup: run `/model`                                                                                                                                                                |
-| `Unknown file extension ".tgz"`                                  | Install the extracted tarball directory, not the `.tgz`                                                                                                                                                                      |
-| Gateway answers 401 or 403                                       | Compare `iss`, `aud` and roles in the gateway logs with [What the gateway receives](#what-the-gateway-receives); [docs/keycloak-setup.md](docs/keycloak-setup.md#checking-the-result) shows how to inspect the token locally |
-| Anything else                                                    | `PI_KC_LOG=debug pi`, then [open an issue](https://github.com/AyRickk/pi-keycloak-auth/issues/new/choose) with the log (it contains no secret)                                                                               |
+| Symptom                                                          | Cause and fix                                                                                                                                                                                                                   |
+| ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `not_allowed: Offline tokens not allowed for the user or client` | The user lacks the `offline_access` role, or the scope is not assigned to the client. Fix the realm, or set `offlineAccess: false` (sessions then end with the SSO session)                                                     |
+| `invalid_grant` after a long pause                               | Offline session expired or revoked, or SSO session ended with `offlineAccess: false`. Run `/login keycloak`                                                                                                                     |
+| Keycloak page _Invalid parameter: redirect_uri_                  | Add the exact redirect URI to the client (or `http://127.0.0.1/*` with `callbackPort: 0`)                                                                                                                                       |
+| `unauthorized_client` with the device method                     | Enable _OAuth 2.0 Device Authorization Grant_ on the client                                                                                                                                                                     |
+| `Port 49170 on 127.0.0.1 is already in use`                      | Another program holds the port; the login falls back to pasting. Or set `callbackPort: 0`                                                                                                                                       |
+| Provider shown as _Keycloak (not configured)_                    | Read the message: it lists the fields to fix and the config file path                                                                                                                                                           |
+| `no default model is configured for provider "keycloak"`         | Expected after the first login on a fresh setup: run `/model`                                                                                                                                                                   |
+| No Keycloak model in `/model`                                    | Discovery failed or has not run yet: `PI_KC_LOG=info` shows `discovered N model(s)` or the gateway's answer. With pi, open `/model` again after the first `/login`. `pi -p` only sees models found by an earlier interactive pi |
+| `omp --mode rpc` refuses to start before the first login         | Oh My Pi's RPC mode needs a model to start with: declare one in `models` (with `"discoverModels": true` to keep discovery) and pass `--model keycloak/<id>`                                                                     |
+| Oh My Pi ignores the configuration                               | Check where it looks: the message names the file. Set `PI_KC_CONFIG` to point at it explicitly                                                                                                                                  |
+| `Unknown file extension ".tgz"`                                  | Install the extracted tarball directory, not the `.tgz`                                                                                                                                                                         |
+| Gateway answers 401 or 403                                       | Compare `iss`, `aud` and roles in the gateway logs with [What the gateway receives](#what-the-gateway-receives); [docs/keycloak-setup.md](docs/keycloak-setup.md#checking-the-result) shows how to inspect the token locally    |
+| Anything else                                                    | `PI_KC_LOG=debug pi`, then [open an issue](https://github.com/AyRickk/pi-keycloak-auth/issues/new/choose) with the log (it contains no secret)                                                                                  |
 
 ## Security
 
