@@ -262,4 +262,101 @@ describe("login", () => {
     expect(all).not.toContain(kc.calls[0]!.form.get("code_verifier")!);
     expect(all).not.toMatch(/access-1|refresh-1/);
   });
+
+  describe("Oh My Pi callbacks (no onSelect, no onDeviceCode)", () => {
+    const deviceKeycloak = () =>
+      fakeKeycloak((call) =>
+        call.url === DEVICE_URL
+          ? {
+              body: {
+                device_code: "d",
+                user_code: "WXYZ-1234",
+                verification_uri: `${ISSUER}/device`,
+                verification_uri_complete: `${ISSUER}/device?user_code=WXYZ-1234`,
+                expires_in: 60,
+              },
+            }
+          : { body: tokens(3) },
+      );
+    /** Callbacks shaped like Oh My Pi's interactive /login. */
+    const ompCallbacks = (overrides: Parameters<typeof callbacks>[0] = {}) => {
+      const { onAuth, onPrompt, onProgress, onManualCodeInput } = callbacks(overrides);
+      return { onAuth, onPrompt, onProgress, onManualCodeInput };
+    };
+
+    it("asks the method with onPrompt; Enter keeps the recommended one", async () => {
+      const cb = ompCallbacks({ onPrompt: vi.fn(async () => "") });
+      await createLogin(testConfig(), {
+        headless: "SSH session",
+        net: deviceKeycloak().net,
+        sleep: async () => {},
+      })(cb);
+      const prompt = cb.onPrompt.mock.calls[0]![0];
+      expect(prompt).toMatchObject({ allowEmpty: true, placeholder: "device" });
+      expect(prompt.message).toContain("device, browser, paste");
+    });
+
+    it("shows the device code with its URL through onAuth on a desktop", async () => {
+      const kc = deviceKeycloak();
+      const cb = ompCallbacks({ onPrompt: vi.fn(async () => "d") });
+      const creds = await createLogin(testConfig(), { net: kc.net, sleep: async () => {} })(cb);
+      expect(creds.access).toBe("access-3");
+      expect(cb.onAuth).toHaveBeenCalledWith({
+        url: `${ISSUER}/device?user_code=WXYZ-1234`,
+        instructions: expect.stringContaining("WXYZ-1234"),
+      });
+    });
+
+    it("prints the device code through onProgress when headless", async () => {
+      const cb = ompCallbacks({ onPrompt: vi.fn(async () => "") });
+      await createLogin(testConfig(), {
+        headless: "container",
+        net: deviceKeycloak().net,
+        sleep: async () => {},
+      })(cb);
+      expect(cb.onAuth).not.toHaveBeenCalled();
+      expect(cb.onProgress).toHaveBeenCalledWith(expect.stringContaining("WXYZ-1234"));
+    });
+
+    it("a refused method prompt (Oh My Pi RPC mode) falls back to the recommended method", async () => {
+      const kc = deviceKeycloak();
+      const cb = ompCallbacks({
+        onPrompt: vi.fn(async () => Promise.reject(new Error("not supported in RPC"))),
+      });
+      const creds = await createLogin(testConfig(), {
+        headless: "SSH session",
+        net: kc.net,
+        sleep: async () => {},
+      })(cb);
+      expect(creds.access).toBe("access-3");
+    });
+
+    it("a cancelled method prompt cancels the login", async () => {
+      const controller = new AbortController();
+      const cb = ompCallbacks({
+        onPrompt: vi.fn(async () => {
+          controller.abort();
+          throw new Error("Login cancelled");
+        }),
+      });
+      await expect(createLogin(testConfig())({ ...cb, signal: controller.signal })).rejects.toThrow(
+        /cancelled/,
+      );
+    });
+
+    it("rejects an unknown method", async () => {
+      const cb = ompCallbacks({ onPrompt: vi.fn(async () => "carrier pigeon") });
+      await expect(createLogin(testConfig())(cb)).rejects.toThrow(/Unknown login method/);
+    });
+
+    it("loginMethod skips the choice on any host", async () => {
+      const cb = callbacks();
+      await createLogin(testConfig({ loginMethod: "device" }), {
+        net: deviceKeycloak().net,
+        sleep: async () => {},
+      })(cb);
+      expect(cb.onSelect).not.toHaveBeenCalled();
+      expect(cb.onDeviceCode).toHaveBeenCalled();
+    });
+  });
 });

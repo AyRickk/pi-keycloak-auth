@@ -25,6 +25,8 @@ const config = (overrides: Partial<KeycloakConfig> = {}): KeycloakConfig => ({
   baseUrl: "http://127.0.0.1:1/v1",
   headers: {},
   models: [],
+  discoverModels: false,
+  loginMethod: undefined,
   refreshLeewaySeconds: 30,
   browserTimeoutSeconds: 60,
   ...overrides,

@@ -62,6 +62,19 @@ python3 -m pip install --require-hashes -r test/pi/requirements.txt
 python3 test/pi/real-pi-check.py /tmp/real-pi    # prints PASS/FAIL per check, keeps screen captures
 ```
 
+### Real Oh My Pi check
+
+Runs the actual Oh My Pi (`omp --mode rpc`) with the built extension in a throwaway `HOME`,
+against one local server playing Keycloak and the gateway: browser and device-code logins,
+model discovery, a chat request, short-lived tokens and a restart. Needs `omp` and Bun on
+`PATH` (for example `npm install --prefix /tmp/omp bun @oh-my-pi/pi-coding-agent` and
+`PATH=/tmp/omp/node_modules/.bin:$PATH`); no docker.
+
+```sh
+npm run build
+node test/omp/real-omp-check.mjs                 # prints PASS/FAIL per check
+```
+
 ## Pull requests
 
 `main` is protected: every change, including the maintainer's, goes through a pull request.

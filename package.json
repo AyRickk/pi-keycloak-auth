@@ -1,7 +1,7 @@
 {
   "name": "pi-keycloak-auth",
   "version": "0.1.0",
-  "description": "Keycloak OAuth2/OIDC login for the pi coding agent: PKCE browser and device flows, offline tokens, automatic refresh, OpenAI-compatible provider.",
+  "description": "Keycloak OAuth2/OIDC login for the pi coding agent and Oh My Pi: PKCE browser and device flows, offline tokens, automatic refresh, OpenAI-compatible provider with model discovery.",
   "license": "MIT",
   "type": "module",
   "author": "AyRickk",
@@ -14,6 +14,8 @@
   "keywords": [
     "pi-package",
     "pi",
+    "oh-my-pi",
+    "omp",
     "keycloak",
     "oauth2",
     "oidc",
