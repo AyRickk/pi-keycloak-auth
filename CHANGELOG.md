@@ -25,7 +25,9 @@ All notable changes to this project are documented here. The format follows
 - The configuration file is looked up in the running agent's folder first, then in the other
   agent's folder.
 - The bundle is now 40 KiB (32 KiB before).
-
+- Repository workflow only: pull requests are squash-merged only, and their titles (the commit
+  messages on `main`) must follow Conventional Commits, checked in CI. An optional
+  `.githooks/commit-msg` hook applies the same rule locally.
 - Development tooling: Vitest 5, ESLint 10,
   TypeScript 6.0, esbuild 0.28, GitHub Actions v7, and `minimatch` 11 for the linters. The
   development dependency tree has no known vulnerability.
