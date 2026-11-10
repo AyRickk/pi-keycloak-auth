@@ -1,0 +1,27 @@
+name: PR title
+
+# Pull requests are squash-merged and the title becomes the commit message on main:
+# it must follow Conventional Commits.
+on:
+  pull_request:
+    types: [opened, edited, reopened, synchronize]
+
+permissions:
+  contents: read
+
+jobs:
+  conventional-title:
+    name: PR title (Conventional Commits)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+      # The title goes through the environment, never interpolated into the script.
+      - run: node scripts/commit-convention.mjs "$PR_TITLE"
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}

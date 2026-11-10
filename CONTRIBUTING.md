@@ -81,8 +81,9 @@ node test/omp/real-omp-check.mjs                 # prints PASS/FAIL per check
 
 - Fork the repository (or create a branch if you have write access) and open a pull request
   against `main`. One topic per pull request; link the issue it addresses.
-- **The pull request title becomes the commit message**: pull requests are squash-merged, so
-  write the title as a short imperative sentence ("Fix device polling interval").
+- **The pull request title becomes the commit message**: pull requests are squash-merged (the
+  only merge method), so the title must follow the [commit messages](#commit-messages)
+  convention; the `PR title` check enforces it.
 - All required checks must pass: typecheck, lint, format, unit and host tests on Linux and
   macOS with Node 22.19 and 24, bundle and package checks, the end-to-end suite against
   Keycloak and the real pi check. The branch must be up to date with `main`.
@@ -90,6 +91,29 @@ node test/omp/real-omp-check.mjs                 # prints PASS/FAIL per check
 - Add or update tests with the change; update the README or `docs/` when behavior or
   configuration changes, and add a line under `## [Unreleased]` in `CHANGELOG.md`.
 - History stays linear: no merge commits, no force pushes to `main`.
+
+### Commit messages
+
+Commits on `main` follow [Conventional Commits](https://www.conventionalcommits.org):
+
+```
+type(scope)!: subject
+```
+
+- `type`: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`, `ci`, `chore`
+  or `revert`. A `feat` or `fix` is what users notice; tooling and CI changes use `build`/`ci`.
+- `scope` is optional, lowercase (`login`, `refresh`, `models`, `deps`); `!` marks a breaking
+  change.
+- `subject`: imperative, no trailing period; the whole line at most 100 characters.
+
+Examples: `feat: support Oh My Pi`, `fix(refresh): keep the token on a 503`,
+`build(deps-dev): bump vitest to 5.2.0`.
+
+The rule lives in `scripts/commit-convention.mjs`. To apply it to your local commits as well:
+
+```sh
+git config core.hooksPath .githooks
+```
 
 ## Releases
 
