@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-10
+
 ### Added
 
 - Oh My Pi support from the same package: the configuration is found in `~/.omp/agent` (or
@@ -47,5 +49,6 @@ All notable changes to this project are documented here. The format follows
   mode that names missing or invalid fields.
 - Single-file build with no runtime dependency.
 
-[Unreleased]: https://github.com/AyRickk/pi-keycloak-auth/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/AyRickk/pi-keycloak-auth/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/AyRickk/pi-keycloak-auth/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/AyRickk/pi-keycloak-auth/releases/tag/v0.1.0

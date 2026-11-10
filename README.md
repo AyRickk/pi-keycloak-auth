@@ -78,7 +78,7 @@ Pick the mode that fits your environment; the extension behaves the same with ea
 
 ```sh
 pi install npm:pi-keycloak-auth            # latest
-pi install npm:pi-keycloak-auth@0.1.0      # pinned
+pi install npm:pi-keycloak-auth@0.2.0      # pinned
 ```
 
 ### From a local directory or an offline tarball
